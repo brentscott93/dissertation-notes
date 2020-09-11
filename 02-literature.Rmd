@@ -1,0 +1,322 @@
+# Analysis
+```{r setup, include=FALSE}
+library(ggplot2)
+```
+
+This section details how trapping papers performed and described their analysis. 
+
+*** 
+## [Finer 1994](https://www-nature-com.silk.library.umass.edu/articles/368113a0.pdf)
+
+3-bead
+
+**The original myosin 3 bead assay**
+
+* Report 11nm steps
+
+> "Signals were sampled at 4kHz (R. C. Electronics, ISC-16), recorded on a  computer, and subsequently filtered during analysis using up to 8-point averaging, and a 2-8-point Hanning filter. Essentially the same results were achieved using steep-cut Bessel filters. Single displacement amplitudes were measured, using the minimum filtering possible, by fitting lines through the baseline noise on either side of an event, and (where possible) through the noise at the plateau of the event."
+
+No references to what software, programs, etc. the performed this analysis in. Must assume this was performed manually. 
+
+**Inclusion criteria:**
+
+1. The displacements had to be isolated events; the baseline brownian motion had to be at the same level on either side of the peak
+2. Displacements could not appear similar in character to the multiple displacements shown in Fig. 3. (i.e. fig2b, right panel)
+3. Displacements smaller than or equal to the level of the brownian noise (equivalent to the perpendicular motion shown in the lower trace) were not scored (causes truncated below ~5 nm in Fig2d). 
+
+![Finer 1994 Fig 2](images/finer-94-fig2.png)
+
+To estimate off-rate calculate 1/mean(time_on):
+
+> "The reciprocal of the mean value of duration of single interactions gives the rate constant for the process which terminates the event...The duration of <= 7 ms for single displacements is  equivalent to a rate constant of >= 140 s^-1 This value can be compared directly with the rates that affect detachment in the acto-SI  ATPase, and it probably corresponds to an isomerization between two AM.ADP states preceding ADP release^35"
+
+
+**Mini-ensemble 5ug/mL**
+
+* Estimate mini-ensemble velocity by dividing displacement by time on (displacement / t_on)
+* Fit lines (probably by hand) to adjacent steps and measure distance between
+
+***
+
+## [Miyata 1994](https://www.jstage.jst.go.jp/article/biochemistry1922/115/4/115_4_644/_pdf/-char/en)
+
+Single bead trap with many heads (motility + trap)
+
+* Only used events with displacements greater than 5nm
+* "steps identified by eye"
+  + at least someone at least admits it
+
+![Miyata 94 Fig 2](images/miyata-94-fig2.png)
+
+
+***
+
+## [Molloy 1995 (Biophysics)](https://www-ncbi-nlm-nih-gov.silk.library.umass.edu/pmc/articles/PMC1281954/pdf/biophysj00062-0305.pdf)
+
+From April 1995
+
+3 bead assay
+
+* All data filtered using 9-point running average
+
+> "Attachment is defined as a transition in the force records greater than a threshold (indicated by the horizontal lines, lasting for at least 10ms)"
+
+![Figure 4 - Molloy 1995 (Biophysics)](images/molloy-95-bp-fig4.png)
+
+* Translation to me: Set a seemingly arbitrary (no explanation) y-axis force/displacement threshold and if events surpass this threshold for more than 10ms the event is ID'd. 
+  + similar to how our mini-ensemble analyzer works
+* Estimate step size for both S1 and HMM as 15nm (due to event picking methods assuming - only Id large displacements)
+* Distortion-dependence in this paper seems to mean load-dependence
+
+> "longer displacements could arise because both their and our data events were analyzed by eye; this may have introduced observer bias."
+
+
+***
+
+## [Molloy 1995 (Nature)](https://www-nature-com.silk.library.umass.edu/articles/378209a0.pdf)
+
+From Nov 1995
+
+**First time running variance is used to detect events in a myosin 3 bead assay** (from what I can gather)
+3 bead assay
+
+Analyzed data by two criteria and I think they did stuff by eye. No reference to software, algorithms, scripting language, etc. In the last line of Fig. 2 they say the 'amplitude of each event was estimated by eye.' This makes me think the event identification was also done by eye/hand using their criteria as guidelines. 
+
+1. Displacement-based
+   + 'fast-rising displacements could be clearly distinguished from thermal vibration of the actin filament (Fig. la-c).' 
+2. Variance-based
+   + 'Using low variance of noise (Fig. Id) as the criterion for attachment, we again measured the size of displacements produced by S I and HMM relative to the mean rest position.'
+   + **Used a 13-point running variance** (see below figure panel d)
+   
+![Molloy 95 Nature. The "1, 2, 3" in panel C correspond to D and F.](images/molloy-95-nature.png)
+   
+Veigel 2002 cites this paper as a reference for how their analysis was complete; however, there is little information provided in Molloy 1995 describing actual data analysis. There are also no ensemble averages in this paper.This is a short (2 page text + 2 page figure) "Letter to Nature". 
+
+***
+## [Mehta 1997](https://www.pnas.org/content/pnas/94/15/7927.full.pdf)
+
+__Title: Detection of single-molecule interactions using correlated thermal diffusion__  
+_Spudich Lab_
+
+tl;dr - Track the position of two beads. Since they are connected by a (taut) actin filament brownian motion of one bead is transmitted to the other so the bead position is correlated (i.e. one bead moves left and pulls other bead left). When a stiffer myosin binds the correlation goes away because the head interrupts the translation of bead movement. 
+
+This seems to be the precursor analysis to co-variance. Seems this analysis could counteract bad signal to noise because this method is not looking at signal variance or displacement from baseline, but position correlation between 2 beads. 
+
+
+How: Essentially is a rolling linear regression to a set of small windows and return the r (i.e. correlation coefficient value). This will generate 2 seperate (slightly overlapping gaussians) that distinguish bound from unbound periods (unbound r ~0.5, and unbound is close 0). 
+Example:
+
+```{r, include=F}
+left_bead <-  c(rep(1, 3), rep(2, 3), rep(3, 3))
+right_bead <-  seq(0.5, by = 0.5, along.with = left_bead)
+t <- data.frame(left_bead = left_bead, 
+                right_bead = right_bead)
+
+a<- ggplot2::ggplot(data = t, aes(x = right_bead, y = left_bead))+
+   geom_point()+
+   geom_smooth(method = 'lm')+
+   ggtitle('un-bound has correlated position')
+
+t2 <- data.frame(left_bead = rnorm(100), 
+                 right_bead = rnorm(100))
+
+b <-ggplot2::ggplot(data = t2, aes(x = right_bead, y = left_bead))+
+   geom_point()+
+   geom_smooth(method = 'lm')+
+   ggtitle('bound has uncorrelated position')
+
+gridExtra::grid.arrange(a, b, ncol = 2)
+
+
+```
+
+![Metha 1997 Fig1](images/mehta97-fig1.png)
+
+
+***
+## [Guilford 1997](https://pdf.sciencedirectassets.com/277708/1-s2.0-S0006349597X71802/1-s2.0-S0006349597787538/main.pdf?X-Amz-Security-Token=IQoJb3JpZ2luX2VjEOD%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJHMEUCIQDFVpXfXPSTkr0PYl1X6iFLPdczaQbYqbEYE2XomhzPBAIgDYL0josqYvNkiIRFdpAf3sHSjnGJLcErwezi35sFNfgqvQMIyf%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARADGgwwNTkwMDM1NDY4NjUiDKXXgUc9qZj%2B2kJ7iCqRA21ypTr%2FYT3JDOEOjYKy%2BVwJVzK2DRVBayT819OPaq5IiLlHXt5Wd6AKEsZGu200HFxstkHFfWDIaE5E8aAvv3QWsarDyrYJFu1bducjKtR4j215K7pzddeYJPli%2BMGQ2KzX8iatH2ShDOweLvFtUaMww48f1d%2FVu%2BNVWpoNpMmfNexdquFs9vxx9PYXJAXguqNG5jCvC6GHGfgclSXtuKYp%2FVvMZtg66LF%2BzWiLkoAWj%2FkglP8HRj5sWzUSw4539j3GB%2B0vXwUyGL0LvnOeKHGIfDONIJv7AzAFiuQlreF7A%2FM95uUVpcBMW9piCJ8BnDgA%2BbLTxcNw0QboBho8FsklSncb6WFz6hWH9tH9U0KErYfbdBldXKA2Vzs8H9qf5fv3Iq7Gk9x%2FFzHerRCr4vEqLyjvbByWJGmqzYABLW2HyRKdzFUsZO%2FUULPhdve0NEtWXZuBfRwyvZI1zkrUwoVz3XdNMCrgCGl4l0%2FqOfzVjr%2FmacC9OqH9iewAbi2pEG59cmdf1E7XnxBkCSGQdZMPMLvLlvoFOusB5SAQDsAal%2BuNNMCSp3OeQhI7KqvFe6PcO7IvUJ4Vzf7wdGObY6xeJTKROnCxSAupS5eIpJkKPE4x6hwMHRfvrYfQh4XgYc2Cqt7%2BgALVGIACHhSy88gWnJ89NzHB%2Bm9Hv9rzu5aolcIMBAGzQveoh6aJSdEbzdXii7DTPcGGcXD7MjP5zRwds4FHSW%2BflfHTcUXKan8OBo6wIJJrqkPdRs8bQo5BG6lJBrSM1arOWuBILCqRX11vauM4B6TGIGUH91npr%2B7hFy487cMC1owIYZP%2BDjR4YSok6dD3J8zCVNjJrqUIKS7Uazr9Mw%3D%3D&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20200826T010534Z&X-Amz-SignedHeaders=host&X-Amz-Expires=300&X-Amz-Credential=ASIAQ3PHCVTYTJMSFAU6%2F20200826%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Signature=6e4fead768982c605e02b3b93dfff4e498bbbb60201a5bf2dc245f0550e6169b&hash=3ffe04a7af4d576fe9c4df16f9ed6e7798a60c173b5b010b52218112724177ae&host=68042c943591013ac2b2430a89b270f6af2c76d8dfd086a07176afe7c76c2c61&pii=S0006349597787538&tid=spdf-704a30c0-e06f-4b13-b60f-326660937046&sid=346b3c3f1f0818401e7a63a96244b70a4822gxrqa&type=client)
+
+_Warshaw Lab_
+
+__Title: Smooth Muscle and Skeletal Muscle Myosins Produce Similar Unitary Forces and Displacements in the Laser Trap__
+
+The first MV trapping paper (originally developed for ion-channel data). 
+
+Measured 10nm steps for both skeletal and cardiac myosin. Agrres with Finer 1994, but double Molloy 1995a
+
+__MV-Pros:__
+* No hand selection of events / manual scoring
+* model independent transformation
+* requires no assumptions/interpretation of the actual data
+
+__MV-Cons:__
+* Time-ons / event duration estimated indirectly through post-analysis fits.
+* Step sizes are time-weighted. Long duration events/displacements will be emphasized as they will contribute many counts to the histograms. 
+
+__Additional:__ 
+* Histograms emphasize periods where data is constant throughout window (transitions cause spikes/archs between the two populations)
+* the mean dimension is a sum of multiple gaussians
+* variance is chi-squared
+
+__How:__ 
+* Calculate running mean and variance of trap data
+* assemble into 3d-histogram(x = mean, y = variance, z = counts/cumulative time/'volume' i.e.number of data points within a given mean variance bin)
+* fitting a peak can be approximated by the product of the PDF in the mean and variance dimension
+* time-ons:
+      * volume of each component is related to 1) window width (N), 2) event duration (ton), and 3) the number of events (k)
+      * relationship between volumes (y) vs window width (x)
+      
+> $V_{mv}=t_{on}*K*e^{(N-l)t_{on}}$
+
+* Step sizes: 
+
+> "Event sizes were calculated as the difference between the means of the event and the baseline populations in each dataset, and errors were propagated(SkoogandWest,1982)"
+
+* Fit baseline record with no events and remove from subsquent MVs
+* Curve fit event population with 1 gaussian vs many and compare with F-test
+   * usually needs more than 1 gaussian to describe event populations
+
+***
+
+## [Veigel 1998](https://reader.elsevier.com/reader/sd/pii/S0006349598740615?token=3D6F92CFA9EFECD932E31B31F365A3ADE934A216458567737CC777258FA52477E83B4AB5C326273329513AAD0A6307F4)
+
+Title: The Stiffness of Rabbit Skeletal Actomyosin Cross-Bridges Determined with an Optical Tweezers Transducer
+
+This paper has great details on the laser trap setup and how their experiments are designed. The great bulk of the paper is dealing with calculating the stiffness of actin, the bead-actin connection, and cross bridge stiffness. 
+
+They implement 2 QPDs in this paper to measure position of 2 beads simultaneously. They use this to answer questions that seemed to arise from the 1995 and other previous papers about their estimates about myosin displacements. They state: 
+
+> 1. Does the motion of a single bead correctly measure the motion of the entire bead-actin-bead assembly, i.e., does the system behave as a nearly “rigid dumbbell”?
+2. Does the actin filament change length significantly during cross-bridge attachments?
+3. Do artifactual displacements arise if the actin filament binds to HMM that is situated with an orthogonal displace-ment to the filament center line?
+
+__The Analysis__
+
+> "Attachments were detected from the increase in stiffness(Molloy et al., 1995), and the amplitude of each was measured relative to the mean rest positions for the two beads(Fig. 6D). Attachments were detected automatically by calculating the running variance of the position data (fivepoints), applying a median filter (31 points) to the calculated variance, and then thresholding this data. The data associ-ated with attached intervals were removed, and the remaining data were corrected for baseline drift. Attachment event amplitudes were obtained from the median point in the datarelative to corrected baseline at the middle time point of theevent. The distributions of event amplitudes, measured sep-arately from data obtained for left and right 4QDs, areshowninFig.6D,a,b. These histograms were fitted wellby a single Gaussian distribution, indicating that the dataconsists of a single population of events. Therefore themean amplitude of the events was used to measure theaverage movement produced by the cross-bridge. The spread of the data is explained by the randomizing effect of Brownian motion (Molloy et al., 1995). Both distributions were centered at 5 nm from mean rest position.
+
+
+__They never explain what "thresholding this data" means or how they determine this value.__
+
+
+The (summarized) answers from the 3 questions: 
+
+1. Yes - systems behaves as rigid dumbbell because the position of the 2 beads is well correlated during myosin attachment. 
+2. No - actin length does not change during attachment. Histograms of event displacements from left and right bead  = 0. 
+3. No - myosin always pulls one way and even if not aligned it will still pull toward negative side actin. Again, the histograms of right and left trap and their difference is 0 indicating only displacements in the x direction. 
+
+
+![Veigel 1998 Fig6d](images/veigel-1998-fig6d.png)
+
+
+***
+ ##[Knight 2001](https://pdf.sciencedirectassets.com/271289/1-s2.0-S0079610700X00351/1-s2.0-S0079610701000104/main.pdf?X-Amz-Security-Token=IQoJb3JpZ2luX2VjEHcaCXVzLWVhc3QtMSJHMEUCIQDNcWL8toF0Em3jQBbZVR96IzvIhyvHfizqmIzgvBkFGgIgKb71sKUM2qCGI0CCnjrX5HX7HUcSsP84iVaeIwkdkz4qtAMIXxADGgwwNTkwMDM1NDY4NjUiDNNnWX5N%2BFL5raV%2B8yqRAxx7A13Gm%2FUJiPGQvcYe9iTii5Jk2GFHrbOu7NE4DK0h4bZAk3lcZPkDkJt4EIZiH4fE4ceXntOmnxFdvM91F2gLlhZhD1hkh9%2F9pPDiJg%2BZy9j1q6N8JFKIxoKtONycRukb%2BIKA745cD4CTPexjbfyw3ZLGuHY%2Bib3cAYBYrhqCkXBdBaeSOtBaSFsQIp6ne9woPrI7dlcK%2Bbd%2Fu8Ul0kNQnj3B8tHTUPvzfzNgvPP3MejxUEBpqgcC4XD6J0UnHxdBPhqaPyuCbmPHg%2BKhK9KY%2BLL7hC%2BI%2BK6Ou33rlgUXA15ydit8U5QYNBPuWoz03zUHmjpNHqmbnhc5LsrBEST5i%2BnQN9Ozd34nX4LiNtPGa5gFh0xHja4e5HAurOcv6L%2BgAuHgF4hBx787%2FBlATqcutcPbp2SfUpUNpzAExY1g2KwBltCZRUE1HdYk73ry%2FOLTF%2Fzwc3Io296DjmW0VBbX5Z3ywpF6AhNPwLKx%2FPE4xo3gFvY%2FQEpuGZbz30%2BKH3UvUiUO3wUe0XaDBSv4wvE3MPSs%2F%2FkFOusBpvu0E1Mlk9FM2gY%2B7pwV1k96wsDShzK4Ul67ujOK9TB5EnVupw9P6xSwrmKZF%2F9iOOXinxDgRZ4eU0CLzCEjYKm67ui9%2BI3K4widf3byWLS7A2euPmfsoX7drmVL1HIBzEz2lA7Ddx1jh5%2FxhargKjh3w7rAmmT3ghC8mILI0%2FdCPOQy9aD2cRUcIAgk8GTEm6OezwIAb7ZsikWq9%2BoLV6OMoc7uTQGmyzlwtjusxsOUlEZHYXXzaBMvUkZDhK0L5XC758xHgdThe0eMAXrhNVz2A4tN7kj9QkWMTg0leWvQjZA%2B8X9oWXjxZQ%3D%3D&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20200821T151339Z&X-Amz-SignedHeaders=host&X-Amz-Expires=300&X-Amz-Credential=ASIAQ3PHCVTYQVXI3HWD%2F20200821%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Signature=78815dca4838e6b8861c5d80ebe2d65620f40eab46426088a8b090478c82b137&hash=c828e7f71b9f722603ad0d87176ca711463a33b06e408fa992b4c672e24f134d&host=68042c943591013ac2b2430a89b270f6af2c76d8dfd086a07176afe7c76c2c61&pii=S0079610701000104&tid=spdf-bfd0bc71-d236-4650-994a-992a1adcff41&sid=4eae3e695e63b148d429c7710a4b50ef3ecbgxrqa&type=client)
+ 
+Title: Analysis of single-molecule mechanical recordings: application to acto-myosin interactions
+_Veigel & Molloy are co-authors__
+
+Good review of trapping techniques and analysis methods. 
+
+> "Using Brownian motion to detect events is limited in time resolution because of the roll-off  frequency of the thermal noise (Eq. (2)), typically around 100 Hz. Resolution is limited not by the bandwidth of the detector system or methods of analysis but by the lack of signal in this  frequency range. By oscillating one optical tweezer at low amplitude and high frequency (e.g. 1 kHz) and measuring theamplitude or phase of the 1 kHz signal at the other bead we can increase the time resolution to ~1ms. This is very useful for motors with relatively fast kinetics, such as muscle myosins. In order to measure myosin and connection stiffnesses much larger forces must be applied sothat  the  acto-myosin  complex  is  measurably  distorted.  To  do  this  a  low  frequency,  highamplitude, forcing function (e.g. 100 Hz, 300 nm) is used and the position of both beads recorded(see Veigel et al., 1998)."
+
+***
+
+## [Smith 2001](https://reader.elsevier.com/reader/sd/pii/S000634950175922X?token=B0394D351EB05D3DFC6CF5015487DC29F2C091DC590C23FD0BDC25A044A50B0A2CCD162DF0BAFB7146305C8F063C8452)
+
+__Title: Hidden-Markov Methods for the Analysis of Single-Molecule ActomyosinDisplacement Data: The Variance-Hidden-Markov Method__
+
+_tl;dr - HM-Model provides automatic, threshold-free, maximum-likelihood detection of events._
+
+
+> "For event detection, HM algorithms are more powerful than single-edge algorithms because they generate optimized model parameters with respect to the whole timeseries (Appendix A) and the user need not set a threshold level that may influence the number and kind of detected events."
+
+* represent on-time as Poisson distributions and log-linearize
+
+***
+## [Veigel 2002](https://www-nature-com.silk.library.umass.edu/articles/ncb732.pdf)
+
+3 bead assay 
+
+* Variance threshold to ID events and ensemble average
+* Ensemble average fits correspond to ADP-release and ATP-binding (single exponential fits to front and back)
+* 1 reference to [Molloy 1995](https://www-nature-com.silk.library.umass.edu/articles/378209a0.pdf)
+* No description of how this is done in paper (no software, algorithms, etc) for either event detection or ensemble averaging. 
+* Only brief description of root-mean-square of unbound/bound signal amplitude
+
+* renom
+
+
+***
+## [Capitanio 2006](https://www.pnas.org/content/pnas/103/1/87.full.pdf)
+
+__Title: Two independent mechanical events in the interaction cycle of skeletal muscle myosin with actin__
+
+_First time hitch is seen in skeletal myosin_
+
+Analysis: 
+* Variance HM-Model (cites Smith 2001) to ID events
+
+* threshold algorithm to pinpoint exact start of event for ensemble-average
+   * 50 microsecond running variance (advance 1 point)
+   * discard events that were ID'd by HM-Model, but did not meet variance threshold
+   
+* Extend ensemble average by taking the single last or first point and extending out
+* They simulated data and calculated on average how far off true start they were with their threshold
+   * the value was systematic so they corrected the start of the events by moving the ID start point back in time by their calculated value
+   
+   
+
+Estimate attachment (f) and detachment rates (g) as inverse of the average of time-on/time-offs (i.e. 1/avg(time on))
+
+You can estimate myosin stiffness by taking equipartion of the binding events. 
+
+***
+## [Sleep 2006](https://www-pnas-org.silk.library.umass.edu/content/pnas/103/5/1278.full.pdf)
+
+__Title: Reconciling the working strokes of a single headof skeletal muscle myosin estimated from laser-trapexperiments and crystal structures__
+
+_Problem: Estimates of myosin stroke size between structural studies (10-12nm) disagree with optical trapping studies (5-6nm). They discuss why this may be._
+
+
+***
+## [Woody 2016 (MEMLET)](https://reader.elsevier.com/reader/sd/pii/S0006349516304659?token=82A6FC806963D9EF990251E5B1FEE00D41EBA5C24E143F4F34BD480DA160E0EE002ACBDE13CD8441078AA087BBE0C4E5)
+
+__Title: MEMLET: An Easy-to-Use Tool for Data Fitting and Model Comparison Using Maximum-Likelihood Estimation__
+
+_tl;dr - MLE can estimate distribution parameters (i.e. mean/sd) of a dataset._
+
+__How:__
+
+* The likelihood (L) of having a specific data point is given by the value of its PDF  (i.e. what was the probability I got this value from that distribution)
+
+* The likelihood of getting the whole dataset is found by the multiplying the likelihood if each datapoint. 
+   * leads to computational issues as these numbers become too small for the computer to handle (I think this is called underflow).
+   
+* Instead the natural log (log(L)) can be taken of each datapoint and these values summed
+* To achieve maximum of this you need to minimize the summed log(L) to find values of parameters that most likely generated your data
+
+Least-squares fitting is a special case of Maximum Likelihood Estimation 
+
+* Rescale PDF to the actual observable range of the experiments before fitting. 
+   * i.e. on-times un-detectable due to dead-time. The probability of observing these events is 0 so you can re-normalize the PDF to relfect this giving more realistic fits. 
+   
+***
+## Blackwell 2020 (SPASM)
+
+__Important: MATLAB license is $2150 perpetual or $860/year__
+
+Program works by ID events witg covariance or variance threshold and then changepoint on the whole event (seems to do changepoint on mean and variance)
+User defined features:
+1. Minimum time on (Veigel & Molloy do this) to prevent random noise being counted as an event
+2. Time between events (program will ignore events that are too close together in time based on users input)
+3. Manually adjust the change point window search 
+4. Manually adjust the change points themselves
+   * Why even use a fancy algorithm if you are going to just pick your locations by hand? and introduce user-bias
+   * they are probably doing this because sometimes the variance can fluctuate in an event and be mistakely ID as the start/end of an event
+   * I have had problems with this and is why I only look at small windows around HM-Model start/end of events telling changepoint there is one change
+   
+Questions: 
+'What changepoint methods? what penalty? what algorithm to calculate penalty? are they using the raw data?
+
+Throwing away a lot of data!
+> When the single threshold method was used to detect binding interactions, we applied a filter to ignore any detected interactions which were shorter than 77 ms or within 63 ms of another detected interaction, to avoid including false positive interactions
+
